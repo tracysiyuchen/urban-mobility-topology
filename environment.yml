@@ -1,0 +1,23 @@
+name: urban-mobility
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.11
+  - pip
+  - numpy
+  - pandas
+  - scipy
+  - scikit-learn
+  - matplotlib
+  - seaborn
+  - jupyter
+  - tqdm
+  - pip:
+    - h3>=4.0
+    - torch>=2.0
+    - torch-geometric
+    - gensim
+    - pyarrow
+    - folium
+    - contextily
