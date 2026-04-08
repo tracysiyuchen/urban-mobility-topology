@@ -5,7 +5,7 @@ Steps:
   1. Load & filter trips (remove sub-60s trips)
   2. Map GPS coordinates to H3 cells (resolution 8, ~460m edge)
   3. Filter to active cells (≥ min_trips pickup OR dropoff across full dataset)
-  4. Assign each trip to one of 4 time bins per day
+  4. Assign each trip to a configured time bin per day
   5. Build per-snapshot OD matrices (log1p-transformed) + node features [inflow, outflow]
   6. Build static geographic adjacency matrix A_geo (inverse-distance, top-k neighbors)
   7. Save mapped trip records for downstream models
