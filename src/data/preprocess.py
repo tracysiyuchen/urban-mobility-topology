@@ -110,23 +110,26 @@ def build_snapshots(df: pd.DataFrame, active_cells: list, out_dir: str) -> list:
     print(f"  Building {len(groups)} snapshots …")
 
     for (date, tbin), grp in tqdm(groups, desc="snapshots"):
-        rows   = grp["pu_idx"].values
-        cols   = grp["do_idx"].values
+        ### fixed 04/11 for sparsity
+        rows = grp["pu_idx"].values
+        cols = grp["do_idx"].values
         od_raw = sp.coo_matrix(
-            (np.ones(len(grp), dtype=np.float32), (rows, cols)), shape=(N, N)
-        ).toarray()
+            (np.ones(len(grp), dtype=np.int32), (rows, cols)), shape=(N, N)
+        ).tocsr()
+        od_raw.sum_duplicates()
 
-        # od_raw  — raw integer trip counts, used for empirical OD analysis
-        # od_log  — log1p(od_raw), used as training target (normalises scale)
-        od_log    = np.log1p(od_raw).astype(np.float32)
-        outflow   = np.log1p(od_raw.sum(axis=1)).astype(np.float32)  # [N]
-        inflow    = np.log1p(od_raw.sum(axis=0)).astype(np.float32)  # [N]
-        node_feat = np.stack([outflow, inflow], axis=1)               # [N, 2]
+        # od_raw  — sparse raw trip counts, used for empirical OD analysis
+        # od_log  — sparse log1p(od_raw), used as training target (normalises scale)
+        od_log = od_raw.astype(np.float32).copy()
+        od_log.data = np.log1p(od_log.data).astype(np.float32)
+        outflow = np.log1p(np.asarray(od_raw.sum(axis=1)).ravel()).astype(np.float32)  # [N]
+        inflow = np.log1p(np.asarray(od_raw.sum(axis=0)).ravel()).astype(np.float32)   # [N]
+        node_feat = np.stack([outflow, inflow], axis=1)                                  # [N, 2]
 
         key = f"{date}_{tbin.replace(' ', '_')}"
-        # Save both: log1p version for training, raw counts for analysis
-        np.savez_compressed(os.path.join(od_dir,   f"{key}.npz"),
-                            od=od_log, od_raw=od_raw.astype(np.int32))
+        # Save sparse OD matrices separately to avoid O(N^2) dense snapshot storage.
+        sp.save_npz(os.path.join(od_dir, f"{key}_log.npz"), od_log)
+        sp.save_npz(os.path.join(od_dir, f"{key}_raw.npz"), od_raw)
         np.savez_compressed(os.path.join(feat_dir, f"{key}.npz"), feat=node_feat)
         snapshots.append({"date": str(date), "time_bin": tbin, "key": key, "n_trips": len(grp)})
 
@@ -205,11 +208,11 @@ def build_empirical_od(manifest: pd.DataFrame, active_cells: list,
     ]["key"].tolist()
 
     for key in tqdm(train_keys, desc="aggregating OD"):
-        od_raw = np.load(os.path.join(od_dir, f"{key}.npz"))["od_raw"]
-        od_empirical += od_raw.astype(np.int64)
+        od_raw = sp.load_npz(os.path.join(od_dir, f"{key}_raw.npz"))
+        od_empirical += od_raw.toarray().astype(np.int64)
 
     path = os.path.join(out_dir, "od_empirical_train.npz")
-    np.savez_compressed(path, od=od_empirical.astype(np.float32))
+    np.savez_compressed(path, od=od_empirical)
     print(f"  Empirical OD saved: total flow = {od_empirical.sum():,} trips → {path}")
 
 
