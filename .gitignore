@@ -1,9 +1,63 @@
+# =========================
+# Python
+# =========================
 __pycache__/
 *.pyc
+*.pyo
+*.pyd
+*.pyc.*
+*.egg-info/
+dist/
+build/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Jupyter
 .ipynb_checkpoints/
-data/processed/
-*.png
-*.jpg
-*.jpeg
-*.html
+
+# =========================
+# OS / Editor
+# =========================
+.DS_Store
+.vscode/
+.idea/
+
+# =========================
+# Data (ignore all processed data by default)
+# =========================
+data/processed/*
+data/raw/*
+data/interim/*
+
+# Allow ONLY selected analysis outputs (figures)
+!data/processed/analysis/
+!data/processed/analysis/**/*.png
+!data/processed/analysis/**/*.jpg
+!data/processed/analysis/**/*.jpeg
+!data/processed/analysis/**/*.html
+
+# =========================
+# Large / generated files
+# =========================
 *.npy
+*.npz
+*.pt
+*.pth
+*.ckpt
+*.h5
+*.pkl
+*.pickle
+
+# =========================
+# Logs
+# =========================
+*.log
+
+# =========================
+# Misc
+# =========================
+*.tmp
+*.swp
