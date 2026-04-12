@@ -1,6 +1,10 @@
 # Datasets
 data/nyc-taxi-trip-duration/
 data/processed/
+!data/processed/
+data/processed/*
+!data/processed/analysis/
+!data/processed/analysis/**
 
 # Python
 __pycache__/
