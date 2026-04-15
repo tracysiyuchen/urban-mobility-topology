@@ -1,0 +1,29 @@
+# Datasets
+data/nyc-taxi-trip-duration/
+data/processed/
+!data/processed/
+data/processed/*
+!data/processed/analysis/
+!data/processed/analysis/**
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.env
+
+# Conda / venv
+.conda/
+env/
+venv/
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb
+
+# OS
+.DS_Store
+
+# IDE
+.vscode/
+.idea/
