@@ -123,11 +123,9 @@ def group_keys_by_day(keys: list) -> dict:
     """
     day_map = defaultdict(list)
     for key in keys:
-        # Split on first underscore that separates date from time_bin
-        # Date format: YYYY-MM-DD, rest is time_bin with underscores
-        parts = key.split("_", 3)  # e.g. ["2016", "01", "05", "Morning_Peak"]
-        date_str = f"{parts[0]}_{parts[1]}_{parts[2]}"  # "2016_01_05"
-        time_bin = "_".join(parts[3:])                    # "Morning_Peak"
+        # Key format: "2016-01-05_Morning_Peak"
+        # Date uses dashes, so split on FIRST underscore only
+        date_str, time_bin = key.split("_", 1)   # "2016-01-05", "Morning_Peak"
         day_map[date_str].append((time_bin, key))
 
     # Sort each day's snapshots by canonical time-bin order
