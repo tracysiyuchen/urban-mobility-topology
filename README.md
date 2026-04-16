@@ -19,22 +19,40 @@ We develop three progressive models:
 ### Dual-Graph Model (Proposed Method)
 
 ```
-Node Features [N, 2]
-       |
-       ├──► GCN Branch (A_geo)   ──► z_geo   [N, 64]
-       |         static geographic graph
-       |
-       ├──► GCN Branch (A_flow)  ──► z_flow  [N, 64]
-       |         dynamic per-snapshot flow graph
-       |
-       └──► Multi-Head Cross-Attention Fusion
+Day = [Morning_Peak, Midday, Evening_Peak, Night_early, Night_late]
+
+For each snapshot t:
+    Node Features [N, 2]
+           |
+           ├──► GCN Branch (A_geo)   ──► z_geo_t   [N, 64]
+           |         static geographic graph
+           |
+           ├──► GCN Branch (A_flow_t) ──► z_flow_t  [N, 64]
+           |         dynamic per-snapshot flow graph
+           |
+           └──► Multi-Head Cross-Attention Fusion
+                        |
+                    z_fused_t [N, 64]
+
+Stack: [z_fused_1, ..., z_fused_T]  →  [T, N, 64]
                     |
-                z_fused [N, 64]
+        Temporal Aggregation Module
+        (Bi-LSTM / Temporal Self-Attention / None)
                     |
-                OD Decoder (bilinear + softplus)
+              z_temporal [N, 64]
                     |
-               od_pred [N, N]
+           OD Decoder (bilinear + softplus)
+                    |
+              od_pred [N, N]
 ```
+
+**Three temporal modes** (select via `--temporal`):
+
+| Mode | Flag | Description |
+|------|------|-------------|
+| No temporal | `--temporal none` | Independent snapshots, mean pooling (original) |
+| Bi-LSTM | `--temporal lstm` | Bidirectional LSTM over daily sequence |
+| Temporal Attention | `--temporal temporal_attention` | Multi-head self-attention with positional encoding |
 
 ## Results
 
@@ -81,15 +99,35 @@ Outputs to `data/processed/`:
 ### 2. Train Dual-Graph Model
 
 ```bash
-python src/train_dual_graph.py --config configs/config.yaml
+# No temporal modeling (independent snapshots)
+python src/train_dual_graph.py --config configs/config.yaml --temporal none
+
+# With Bi-LSTM temporal aggregation
+python src/train_dual_graph.py --config configs/config.yaml --temporal lstm
+
+# With Temporal Self-Attention aggregation
+python src/train_dual_graph.py --config configs/config.yaml --temporal temporal_attention
 ```
 
 ### 3. Analyze Embeddings
 
 ```bash
+# Analyze no-temporal embeddings
 python src/analyze.py \
   --embeddings data/processed/models/dual_graph/embeddings.npy \
   --model_name dual_graph \
+  --config configs/config.yaml
+
+# Analyze LSTM embeddings
+python src/analyze.py \
+  --embeddings data/processed/models/dual_graph/embeddings_lstm.npy \
+  --model_name dual_graph_lstm \
+  --config configs/config.yaml
+
+# Analyze temporal-attention embeddings
+python src/analyze.py \
+  --embeddings data/processed/models/dual_graph/embeddings_temporal_attention.npy \
+  --model_name dual_graph_temporal_attention \
   --config configs/config.yaml
 ```
 
