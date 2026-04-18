@@ -2,9 +2,9 @@
   "model": "dual_graph_temporal_attention",
   "n_cells": 642,
   "best_k": 3,
-  "best_silhouette": 0.8611806035041809,
-  "best_dbi": 0.45145390416646763,
-  "best_intra_inter": 1.4002209807572936,
-  "spearman_rho": -0.3731754698164061,
-  "spearman_pval": 0.0
+  "best_silhouette": 0.8232423663139343,
+  "best_dbi": 0.5791114458971097,
+  "best_intra_inter": 2.31847719743911,
+  "spearman_profile_rho": 0.09001075475192086,
+  "spearman_profile_pval": 0.0
 }

@@ -2,9 +2,9 @@
   "model": "dual_graph_lstm",
   "n_cells": 642,
   "best_k": 3,
-  "best_silhouette": 0.8411675095558167,
-  "best_dbi": 0.5146004094459863,
-  "best_intra_inter": 2.3118717581521553,
-  "spearman_rho": -0.3813637140562361,
-  "spearman_pval": 0.0
+  "best_silhouette": 0.8498983979225159,
+  "best_dbi": 0.44396310349267915,
+  "best_intra_inter": 2.6378343594298013,
+  "spearman_profile_rho": 0.09853346417076456,
+  "spearman_profile_pval": 0.0
 }

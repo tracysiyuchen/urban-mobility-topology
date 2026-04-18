@@ -20,7 +20,7 @@ trip2vec:
   window: 1
   min_count: 1
   workers: 4
-  epochs: 20
+  epochs: 30
   sg: 1                           # skip-gram
   negative: 5
 
