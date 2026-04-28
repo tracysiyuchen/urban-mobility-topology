@@ -10,31 +10,44 @@ from torch.optim import Adam
 from torch.optim.lr_scheduler import StepLR
 from torch_geometric.utils import from_scipy_sparse_matrix
 from tqdm import tqdm
+from collections import defaultdict
 
 from src.models.gcn_autoencoder import GCNAutoencoder
+
 
 def load_config(path="configs/config.yaml"):
     with open(path) as f:
         return yaml.safe_load(f)
 
+
 def load_graph(processed_dir):
-    """Load geographic adjacency matrix as PyG edge_index + edge_weight."""
     A = sp.load_npz(os.path.join(processed_dir, "A_geo.npz"))
     edge_index, edge_weight = from_scipy_sparse_matrix(A)
     return edge_index, edge_weight.float()
 
 
 def load_snapshot(processed_dir, key):
-    """Load node features and OD target for one time snapshot."""
-    feat = np.load(os.path.join(processed_dir, "node_features", f"{key}.npz"))["feat"]  # [N, 2]
+    feat = np.load(os.path.join(processed_dir, "node_features", f"{key}.npz"))["feat"]
     od   = sp.load_npz(os.path.join(processed_dir, "od_matrices", f"{key}_log.npz"))
-    od_dense = torch.tensor(od.toarray(), dtype=torch.float32)
-    feat = torch.tensor(feat, dtype=torch.float32)
-    return feat, od_dense
+    return (
+        torch.tensor(feat, dtype=torch.float32),
+        torch.tensor(od.toarray(), dtype=torch.float32)
+    )
+
+
+def group_by_day(manifest, months):
+    """Group snapshot keys by date, only keeping dates in given months."""
+    subset = manifest[manifest["date"].apply(
+        lambda d: int(d.split("-")[1])).isin(months)]
+    groups = defaultdict(list)
+    for _, row in subset.iterrows():
+        groups[row["date"]].append(row["key"])
+    for date in groups:
+        groups[date] = sorted(groups[date])
+    return groups
 
 
 def od_loss(od_pred, od_true):
-    """MSE loss, weighted to emphasise non-zero flows."""
     mask_nonzero = (od_true > 0).float()
     mask_zero    = 1.0 - mask_nonzero
     loss = (mask_nonzero * (od_pred - od_true) ** 2).mean() \
@@ -43,27 +56,23 @@ def od_loss(od_pred, od_true):
 
 
 def main():
-    cfg          = load_config()
-    processed    = cfg["data"]["processed_dir"]
-    embed_dim    = cfg["trip2vec"]["embedding_dim"]   # reuse same dim = 64
-    device       = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    cfg       = load_config()
+    processed = cfg["data"]["processed_dir"]
+    embed_dim = cfg["trip2vec"]["embedding_dim"]
+    device    = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
 
-    #load graph structure
     edge_index, edge_weight = load_graph(processed)
     edge_index  = edge_index.to(device)
     edge_weight = edge_weight.to(device)
 
-    manifest = pd.read_csv(os.path.join(processed, "snapshot_manifest.csv"))
-    train_keys = manifest[manifest["date"].apply(
-        lambda d: int(d.split("-")[1])).isin(cfg["data"]["train_months"])]["key"].tolist()
-    val_keys   = manifest[manifest["date"].apply(
-        lambda d: int(d.split("-")[1])).isin(cfg["data"]["val_months"])]["key"].tolist()
+    manifest   = pd.read_csv(os.path.join(processed, "snapshot_manifest.csv"))
+    train_days = group_by_day(manifest, cfg["data"]["train_months"])
+    val_days   = group_by_day(manifest, cfg["data"]["val_months"])
 
-    print(f"Train snapshots: {len(train_keys)}  |  Val snapshots: {len(val_keys)}")
+    print(f"Train days: {len(train_days)}  |  Val days: {len(val_days)}")
 
-    #modeling
-    model = GCNAutoencoder(in_dim=2, hidden_dim=128, embed_dim=embed_dim).to(device)
+    model     = GCNAutoencoder(in_dim=2, hidden_dim=128, embed_dim=embed_dim).to(device)
     optimizer = Adam(model.parameters(), lr=1e-3, weight_decay=1e-5)
     scheduler = StepLR(optimizer, step_size=5, gamma=0.5)
 
@@ -71,34 +80,47 @@ def main():
     epochs   = 20
 
     for epoch in range(1, epochs + 1):
-        #train
+
         model.train()
         train_loss = 0.0
-        for key in tqdm(train_keys, desc=f"Epoch {epoch:02d} train", leave=False):
-            feat, od_true = load_snapshot(processed, key)
-            feat    = feat.to(device)
-            od_true = od_true.to(device)
+        for date, keys in tqdm(train_days.items(), desc=f"Epoch {epoch:02d} train", leave=False):
+            feats   = []
+            od_true = None
+            for key in keys:
+                feat, od = load_snapshot(processed, key)
+                feats.append(feat.to(device))
+                if od_true is None:
+                    od_true = od.to(device)
+                else:
+                    od_true = od_true + od.to(device)  
 
             optimizer.zero_grad()
-            od_pred, _ = model(feat, edge_index, edge_weight)
+            od_pred, _ = model(feats, edge_index, edge_weight)
             loss = od_loss(od_pred, od_true)
             loss.backward()
             optimizer.step()
             train_loss += loss.item()
 
-        train_loss /= len(train_keys)
+        train_loss /= len(train_days)
 
         model.eval()
         val_loss = 0.0
         with torch.no_grad():
-            for key in val_keys:
-                feat, od_true = load_snapshot(processed, key)
-                feat    = feat.to(device)
-                od_true = od_true.to(device)
-                od_pred, _ = model(feat, edge_index, edge_weight)
-                val_loss += od_loss(od_pred, od_true).item()
-        val_loss /= len(val_keys)
+            for date, keys in val_days.items():
+                feats   = []
+                od_true = None
+                for key in keys:
+                    feat, od = load_snapshot(processed, key)
+                    feats.append(feat.to(device))
+                    if od_true is None:
+                        od_true = od.to(device)
+                    else:
+                        od_true = od_true + od.to(device)
 
+                od_pred, _ = model(feats, edge_index, edge_weight)
+                val_loss  += od_loss(od_pred, od_true).item()
+
+        val_loss /= len(val_days)
         scheduler.step()
         print(f"Epoch {epoch:02d}  train_loss={train_loss:.4f}  val_loss={val_loss:.4f}")
 
@@ -113,14 +135,13 @@ def main():
     model.eval()
     all_embeddings = []
     with torch.no_grad():
-        for key in train_keys:
-            feat, _ = load_snapshot(processed, key)
-            feat = feat.to(device)
-            z = model.encode(feat, edge_index, edge_weight)
+        for date, keys in train_days.items():
+            feats = [load_snapshot(processed, key)[0].to(device) for key in keys]
+            z = model.encode(feats, edge_index, edge_weight)
             all_embeddings.append(z.cpu().numpy())
 
-    embeddings = np.mean(all_embeddings, axis=0)  # [N, embed_dim]
-    out_path = "data/processed/analysis/gcn/embeddings.npy"
+    embeddings = np.mean(all_embeddings, axis=0)
+    out_path   = "data/processed/analysis/gcn/embeddings.npy"
     os.makedirs(os.path.dirname(out_path), exist_ok=True)
     np.save(out_path, embeddings)
     print(f"Embeddings saved: {embeddings.shape} → {out_path}")
