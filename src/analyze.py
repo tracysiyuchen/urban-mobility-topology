@@ -1,5 +1,7 @@
 """
-Metrics:
+Embedding Analysis — works for all three models (Region2Vec, ST-GCN AE, Dual-Graph).
+
+Metrics (per the project proposal):
   1. k-means clustering → Silhouette Score + Davies-Bouldin Index
   2. Intra/Inter Flow Ratio (from Region2Vec paper, Eq. 3)
   3. t-SNE 2D projection (colored by borough / flow volume quartile)
@@ -25,6 +27,7 @@ from sklearn.metrics import davies_bouldin_score, silhouette_score
 from sklearn.preprocessing import normalize
 
 
+# Load data
 def load_resources(cfg: dict):
     processed_dir = cfg["data"]["processed_dir"]
 
@@ -39,6 +42,7 @@ def load_resources(cfg: dict):
     return cells, od_agg
 
 
+# 1. k-means + Silhouette + DBI
 def run_kmeans(embeddings: np.ndarray, k_range: list, seed: int) -> pd.DataFrame:
     results = []
     for k in k_range:
@@ -51,6 +55,7 @@ def run_kmeans(embeddings: np.ndarray, k_range: list, seed: int) -> pd.DataFrame
     return results
 
 
+# 2. Intra/Inter Flow Ratio  (Region2Vec paper, Eq. 3)
 def intra_inter_flow_ratio(od_matrix: np.ndarray, labels: np.ndarray) -> float:
     """
     Ratio = Σ_{ci=cj} s_ij  /  Σ_{ci≠cj} s_ij
@@ -66,6 +71,8 @@ def intra_inter_flow_ratio(od_matrix: np.ndarray, labels: np.ndarray) -> float:
     return float(intra / inter)
 
 
+# 3. Geographic map plots
+# 10 visually distinct colours for up to 10 clusters
 CLUSTER_COLOURS = [
     "#e6194b", "#3cb44b", "#4363d8", "#f58231",
     "#911eb4", "#42d4f4", "#f032e6", "#bfef45",
@@ -96,6 +103,7 @@ def plot_geo_static(cells: list, labels: np.ndarray, od_matrix: np.ndarray,
     fig, axes = plt.subplots(1, 2, figsize=(16, 8))
     fig.suptitle(f"Geographic cluster map — {model_name} (k={k})", fontsize=13)
 
+    # Left: clusters
     for cluster_id in range(k):
         mask = labels == cluster_id
         axes[0].scatter(xs[mask], ys[mask],
@@ -107,6 +115,7 @@ def plot_geo_static(cells: list, labels: np.ndarray, od_matrix: np.ndarray,
     axes[0].set_axis_off()
     axes[0].legend(markerscale=1.5, fontsize=8, loc="lower right")
 
+    # Right: flow volume
     sc = axes[1].scatter(xs, ys, c=np.log1p(node_flow),
                          cmap="YlOrRd", s=45, alpha=0.85, zorder=3)
     ctx.add_basemap(axes[1], source=ctx.providers.CartoDB.Positron, zoom=11)
@@ -121,21 +130,26 @@ def plot_geo_static(cells: list, labels: np.ndarray, od_matrix: np.ndarray,
     print(f"  Static geo map saved → {path}")
 
 
+
+# 4. t-SNE
 def run_tsne(embeddings: np.ndarray, perplexity: int, seed: int) -> np.ndarray:
-    tsne = TSNE(n_components=2, perplexity=perplexity, random_state=seed, n_iter=1000)
+    tsne = TSNE(n_components=2, perplexity=perplexity, random_state=seed, max_iter=1000)
     return tsne.fit_transform(embeddings)
+
 
 def plot_tsne(xy: np.ndarray, labels: np.ndarray, od_matrix: np.ndarray,
               model_name: str, k: int, out_dir: str):
     fig, axes = plt.subplots(1, 2, figsize=(14, 6))
     fig.suptitle(f"t-SNE — {model_name} (k={k})", fontsize=13)
 
+    # Left: colored by cluster
     scatter = axes[0].scatter(xy[:, 0], xy[:, 1], c=labels, cmap="tab10", s=30, alpha=0.8)
     axes[0].set_title("Colored by k-means cluster")
     axes[0].set_xlabel("t-SNE dim 1")
     axes[0].set_ylabel("t-SNE dim 2")
     plt.colorbar(scatter, ax=axes[0], label="Cluster")
 
+    # Right: colored by total flow volume (log-scale)
     node_flow = od_matrix.sum(axis=1) + od_matrix.sum(axis=0)
     axes[1].scatter(xy[:, 0], xy[:, 1], c=np.log1p(node_flow), cmap="YlOrRd", s=30, alpha=0.8)
     axes[1].set_title("Colored by log(total flow volume)")
@@ -150,10 +164,15 @@ def plot_tsne(xy: np.ndarray, labels: np.ndarray, od_matrix: np.ndarray,
     print(f"  t-SNE plot saved → {path}")
 
 
+# 4. Spearman rank correlation: cosine sim vs OD flow
 def spearman_sim_vs_od(embeddings: np.ndarray, od_matrix: np.ndarray) -> float:
+    # Compute Spearman correlation between:
+    #   - pairwise cosine similarity matrix (upper triangle)
+    #   - empirical aggregated OD flow matrix (upper triangle, symmetrized)
     emb_norm = normalize(embeddings, norm="l2")
-    cos_sim = emb_norm @ emb_norm.T                     
+    cos_sim = emb_norm @ emb_norm.T                      # [N, N]
 
+    # Symmetrize OD (treat as undirected flow)
     od_sym = od_matrix + od_matrix.T
 
     N = len(embeddings)
@@ -165,6 +184,7 @@ def spearman_sim_vs_od(embeddings: np.ndarray, od_matrix: np.ndarray) -> float:
     return float(rho), float(pval)
 
 
+# Main
 def main(embeddings_path: str, model_name: str, config_path: str):
     with open(config_path) as f:
         cfg = yaml.safe_load(f)
@@ -180,9 +200,11 @@ def main(embeddings_path: str, model_name: str, config_path: str):
     out_dir = os.path.join(cfg["data"]["processed_dir"], "analysis", model_name)
     os.makedirs(out_dir, exist_ok=True)
 
+    # ── 1. k-means ──────────────────────────────────────────────────────────
     print("\n[1] k-means clustering")
     kmeans_results = run_kmeans(embeddings, k_range, seed)
 
+    # ── 2. Intra/Inter Flow Ratio ────────────────────────────────────────────
     print("\n[2] Intra/Inter Flow Ratio")
     best_k_result = None
     all_rows = []
@@ -196,6 +218,7 @@ def main(embeddings_path: str, model_name: str, config_path: str):
             "dbi":              r["dbi"],
             "intra_inter_ratio":ratio,
         })
+        # Pick k with best silhouette as "best"
         if best_k_result is None or r["silhouette"] > best_k_result["silhouette"]:
             best_k_result = r
 
@@ -205,17 +228,21 @@ def main(embeddings_path: str, model_name: str, config_path: str):
     print(f"\n  Best k by Silhouette: k={best_k_result['k']}")
     print(f"  Metrics table saved → {metrics_path}")
 
+    # ── 3. t-SNE ────────────────────────────────────────────────────────────
     print("\n[3] t-SNE")
     xy = run_tsne(embeddings, analysis_cfg["tsne_perplexity"], seed)
     plot_tsne(xy, best_k_result["labels"], od_agg, model_name, best_k_result["k"], out_dir)
 
+    # ── 3b. Geographic maps ──────────────────────────────────────────────────
     print("\n[3b] Geographic maps")
     plot_geo_static(cells, best_k_result["labels"], od_agg,model_name, best_k_result["k"], out_dir)
 
+    # ── 4. Spearman correlation ──────────────────────────────────────────────
     print("\n[4] Spearman rank correlation (cosine sim vs OD flow)")
     rho, pval = spearman_sim_vs_od(embeddings, od_agg)
     print(f"  ρ = {rho:.4f}  (p = {pval:.2e})")
 
+    # ── Summary ─────────────────────────────────────────────────────────────
     summary = {
         "model":               model_name,
         "n_cells":             N,
@@ -229,7 +256,7 @@ def main(embeddings_path: str, model_name: str, config_path: str):
     summary_path = os.path.join(out_dir, "summary.json")
     with open(summary_path, "w") as f:
         import json as _json
-        _json.dump({k: int(v) if isinstance(v, (np.integer,)) else float(v) if isinstance(v, (np.floating, np.float32, np.float64)) else v for k, v in summary.items()}, f, indent=2)
+        _json.dump(summary, f, indent=2)
 
     print(f"\n{'='*50}")
     print(f"SUMMARY — {model_name}")
