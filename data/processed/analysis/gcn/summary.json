@@ -1,0 +1,10 @@
+{
+  "model": "gcn",
+  "n_cells": 642,
+  "best_k": 3,
+  "best_silhouette": 0.8304101228713989,
+  "best_dbi": 0.7634442735028055,
+  "best_intra_inter": 1.2866303810463222,
+  "spearman_rho": -0.23867011285410342,
+  "spearman_pval": 0.0
+}
