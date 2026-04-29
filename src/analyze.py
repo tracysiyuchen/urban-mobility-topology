@@ -5,7 +5,7 @@ Metrics (per the project proposal):
   1. k-means clustering → Silhouette Score + Davies-Bouldin Index
   2. Intra/Inter Flow Ratio (from Region2Vec paper, Eq. 3)
   3. t-SNE 2D projection (colored by borough / flow volume quartile)
-  4. Spearman rank correlation: cosine similarity matrix vs. empirical OD matrix
+  4. Spearman rank correlation: embedding similarity vs. empirical OD-profile similarity
 """
 
 import argparse
@@ -164,23 +164,21 @@ def plot_tsne(xy: np.ndarray, labels: np.ndarray, od_matrix: np.ndarray,
     print(f"  t-SNE plot saved → {path}")
 
 
-# 4. Spearman rank correlation: cosine sim vs OD flow
-def spearman_sim_vs_od(embeddings: np.ndarray, od_matrix: np.ndarray) -> float:
-    # Compute Spearman correlation between:
-    #   - pairwise cosine similarity matrix (upper triangle)
-    #   - empirical aggregated OD flow matrix (upper triangle, symmetrized)
+# 4. Spearman: embedding cosine similarity vs OD-profile cosine similarity
+def spearman_sim_vs_od_profile(embeddings: np.ndarray, od_matrix: np.ndarray) -> float:
+    # Compare node-pair similarity in embedding space against similarity in
+    # empirical mobility profiles. Each OD row is treated as one region's
+    # aggregate travel pattern to all other regions.
     emb_norm = normalize(embeddings, norm="l2")
-    cos_sim = emb_norm @ emb_norm.T                      # [N, N]
+    emb_cos = emb_norm @ emb_norm.T                      # [N, N]
 
-    # Symmetrize OD (treat as undirected flow)
     od_sym = od_matrix + od_matrix.T
+    od_norm = normalize(od_sym, norm="l2")
+    od_cos = od_norm @ od_norm.T                         # [N, N]
 
     N = len(embeddings)
     idx = np.triu_indices(N, k=1)
-    sim_vals = cos_sim[idx]
-    od_vals  = od_sym[idx]
-
-    rho, pval = spearmanr(sim_vals, od_vals)
+    rho, pval = spearmanr(emb_cos[idx], od_cos[idx])
     return float(rho), float(pval)
 
 
@@ -238,9 +236,9 @@ def main(embeddings_path: str, model_name: str, config_path: str):
     plot_geo_static(cells, best_k_result["labels"], od_agg,model_name, best_k_result["k"], out_dir)
 
     # ── 4. Spearman correlation ──────────────────────────────────────────────
-    print("\n[4] Spearman rank correlation (cosine sim vs OD flow)")
-    rho, pval = spearman_sim_vs_od(embeddings, od_agg)
-    print(f"  ρ = {rho:.4f}  (p = {pval:.2e})")
+    print("\n[4] Spearman rank correlation (embedding sim vs OD-profile sim)")
+    rho_profile, pval_profile = spearman_sim_vs_od_profile(embeddings, od_agg)
+    print(f"  ρ = {rho_profile:.4f}  (p = {pval_profile:.2e})")
 
     # ── Summary ─────────────────────────────────────────────────────────────
     summary = {
@@ -250,8 +248,8 @@ def main(embeddings_path: str, model_name: str, config_path: str):
         "best_silhouette":     best_k_result["silhouette"],
         "best_dbi":            best_k_result["dbi"],
         "best_intra_inter":    best_k_result["intra_inter_ratio"],
-        "spearman_rho":        rho,
-        "spearman_pval":       pval,
+        "spearman_profile_rho":  rho_profile,
+        "spearman_profile_pval": pval_profile,
     }
     summary_path = os.path.join(out_dir, "summary.json")
     with open(summary_path, "w") as f:

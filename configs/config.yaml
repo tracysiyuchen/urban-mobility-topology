@@ -20,10 +20,22 @@ trip2vec:
   window: 1
   min_count: 1
   workers: 4
-  epochs: 20
+  epochs: 30
   sg: 1                           # skip-gram
   negative: 5
 
+
+dual_graph:
+  embedding_dim: 64
+  hidden_dim: 128
+  n_heads: 4                        # multi-head cross-attention heads
+  dropout: 0.3
+  epochs: 30
+  lr: 0.001
+  weight_decay: 0.00001
+  scheduler_step: 10
+  scheduler_gamma: 0.5
+  flow_adj_top_k: 16                # top-k neighbors for flow adjacency per snapshot
 
 loss:
   zero_pair_sample_ratio: 1.0     # ratio of zero-pairs sampled relative to non-zero pairs
