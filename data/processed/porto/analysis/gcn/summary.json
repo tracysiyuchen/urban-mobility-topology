@@ -1,10 +1,10 @@
 {
   "model": "gcn",
   "n_cells": 508,
-  "best_k": 3,
-  "best_intra_inter": 1.2646086710574165,
-  "silhouette_at_best_k": 0.7664403319358826,
-  "dbi_at_best_k": 0.5088747411262309,
-  "spearman_profile_rho": -0.026612453170397232,
-  "spearman_profile_pval": 7.9898731375445e-13
+  "best_k": 5,
+  "best_intra_inter": 0.7909701828779226,
+  "silhouette_at_best_k": 0.697228729724884,
+  "dbi_at_best_k": 0.526558241633013,
+  "spearman_profile_rho": -0.03772644156305004,
+  "spearman_profile_pval": 3.1842793902761883e-24
 }

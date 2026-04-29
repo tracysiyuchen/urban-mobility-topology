@@ -1,56 +1,67 @@
+analysis:
+  kmeans_k_range:
+  - 5
+  random_seed: 42
+  tsne_perplexity: 30
 data:
-  dataset: "nyc_taxi"
-  raw_path: "data/nyc-taxi-trip-duration/train.csv"
-  processed_dir: "data/processed/nyc"
+  active_cell_min_trips: 20
+  dataset: nyc_taxi
+  geo_adj_top_k: 8
   h3_resolution: 8
-  active_cell_min_trips: 20      # min total trips (pickup OR dropoff) to keep a cell
-  trip_duration_min: 60           # seconds
+  processed_dir: data/processed/nyc
+  raw_path: data/nyc-taxi-trip-duration/train.csv
+  test_months:
+  - 6
   time_bins:
-    Morning Peak: [6, 10]
-    Midday: [10, 16]
-    Evening Peak: [16, 20]
-    Night_early: [20, 24]
-    Night_late: [0, 6]
-  geo_adj_top_k: 8                # top-k geographic neighbors per cell
-  train_months: [1, 2, 3, 4]
-  val_months: [5]
-  test_months: [6]
-
-trip2vec:
+    Evening Peak:
+    - 16
+    - 20
+    Midday:
+    - 10
+    - 16
+    Morning Peak:
+    - 6
+    - 10
+    Night_early:
+    - 20
+    - 24
+    Night_late:
+    - 0
+    - 6
+  train_months:
+  - 1
+  - 2
+  - 3
+  - 4
+  trip_duration_min: 60
+  val_months:
+  - 5
+dual_graph:
+  dropout: 0.3
   embedding_dim: 64
-  window: 1
-  min_count: 1
-  workers: 4
   epochs: 30
-  sg: 1                           # skip-gram
-  negative: 5
-
-
+  flow_adj_top_k: 16
+  hidden_dim: 128
+  lr: 0.001
+  n_heads: 4
+  scheduler_gamma: 0.5
+  scheduler_step: 10
+  weight_decay: 1.0e-05
 gcn:
   embedding_dim: 64
-  hidden_dim: 128
   epochs: 30
-  lr: 0.001
-  weight_decay: 0.00001
-  scheduler_step: 10
-  scheduler_gamma: 0.5
-
-dual_graph:
-  embedding_dim: 64
   hidden_dim: 128
-  n_heads: 4                        # multi-head cross-attention heads
-  dropout: 0.3
-  epochs: 30
   lr: 0.001
-  weight_decay: 0.00001
-  scheduler_step: 10
   scheduler_gamma: 0.5
-  flow_adj_top_k: 16                # top-k neighbors for flow adjacency per snapshot
-
+  scheduler_step: 10
+  weight_decay: 1.0e-05
 loss:
-  zero_pair_sample_ratio: 1.0     # ratio of zero-pairs sampled relative to non-zero pairs
-
-analysis:
-  kmeans_k_range: [3, 4, 5, 6, 7, 8, 10]
-  tsne_perplexity: 30
-  random_seed: 42
+  zero_pair_sample_ratio: 1.0
+trip2vec:
+  embedding_dim: 64
+  epochs: 30
+  min_count: 1
+  negative: 5
+  sg: 1
+  window: 1
+  workers: 4

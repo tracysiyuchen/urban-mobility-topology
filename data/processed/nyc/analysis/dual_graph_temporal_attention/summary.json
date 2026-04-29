@@ -1,10 +1,10 @@
 {
   "model": "dual_graph_temporal_attention",
   "n_cells": 642,
-  "best_k": 3,
-  "best_intra_inter": 2.652031175032773,
-  "silhouette_at_best_k": 0.8137335181236267,
-  "dbi_at_best_k": 0.5274011858800591,
-  "spearman_profile_rho": 0.06393386490076329,
-  "spearman_profile_pval": 3.538660932006607e-100
+  "best_k": 5,
+  "best_intra_inter": 0.7657677898516972,
+  "silhouette_at_best_k": 0.7865738868713379,
+  "dbi_at_best_k": 0.4519849291904463,
+  "spearman_profile_rho": 0.07100394589440526,
+  "spearman_profile_pval": 3.687274674547801e-123
 }

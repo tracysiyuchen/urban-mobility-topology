@@ -1,10 +1,10 @@
 {
   "model": "gcn",
   "n_cells": 642,
-  "best_k": 3,
-  "best_intra_inter": 1.2781001084036385,
-  "silhouette_at_best_k": 0.8039435744285583,
-  "dbi_at_best_k": 0.8866566473683658,
-  "spearman_profile_rho": 0.15558505836914457,
+  "best_k": 5,
+  "best_intra_inter": 0.8661121224347181,
+  "silhouette_at_best_k": 0.7066994309425354,
+  "dbi_at_best_k": 0.741346657022659,
+  "spearman_profile_rho": 0.15046883208132883,
   "spearman_profile_pval": 0.0
 }

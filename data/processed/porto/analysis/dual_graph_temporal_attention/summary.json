@@ -1,10 +1,10 @@
 {
   "model": "dual_graph_temporal_attention",
   "n_cells": 508,
-  "best_k": 3,
-  "best_intra_inter": 1.181140328688011,
-  "silhouette_at_best_k": 0.8786390423774719,
-  "dbi_at_best_k": 0.4598022316720196,
-  "spearman_profile_rho": -0.3114538958540328,
+  "best_k": 5,
+  "best_intra_inter": 0.6517728468994703,
+  "silhouette_at_best_k": 0.789121687412262,
+  "dbi_at_best_k": 0.5012359856617832,
+  "spearman_profile_rho": -0.31021747568942665,
   "spearman_profile_pval": 0.0
 }

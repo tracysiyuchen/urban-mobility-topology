@@ -1,10 +1,10 @@
 {
   "model": "trip2vec",
   "n_cells": 508,
-  "best_k": 4,
-  "best_intra_inter": 3.8990673321503806,
-  "silhouette_at_best_k": 0.09961477667093277,
-  "dbi_at_best_k": 2.6709749099172804,
-  "spearman_profile_rho": 0.12480761168231981,
-  "spearman_profile_pval": 3.951628767868218e-249
+  "best_k": 5,
+  "best_intra_inter": 1.2541888880844936,
+  "silhouette_at_best_k": 0.0828975960612297,
+  "dbi_at_best_k": 2.481564301679757,
+  "spearman_profile_rho": 0.1250599112660447,
+  "spearman_profile_pval": 3.8837263980806507e-250
 }
