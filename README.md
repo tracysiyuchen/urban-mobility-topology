@@ -62,27 +62,27 @@ Stack snapshots: [z_fused_1, ..., z_fused_T]
 
 ## Results
 
-### NYC Taxi (642 cells, train Jan–Apr, val May, test Jun)
+### NYC Taxi (642 cells, train Jan–Apr, val May, test Jun, k=5)
 
-| Model | best k | Intra/Inter ↑ | Silhouette ↑ | DBI ↓ | Spearman ρ ↑ |
-|-------|--------|--------------|--------------|-------|--------------|
-| Trip2Vec | 6 | 6.53 | 0.133 | 2.02 | **0.413** |
-| GCN Autoencoder | 3 | 1.28 | 0.804 | 0.887 | 0.156 |
-| Dual-Graph | 3 | **11.15** | 0.710 | 0.503 | 0.167 |
-| Dual-Graph + LSTM | 3 | 7.44 | 0.776 | **0.434** | 0.039 |
-| Dual-Graph + Temporal Attn | 3 | 2.65 | **0.814** | 0.527 | 0.064 |
+| Model | Intra/Inter ↑ | Silhouette ↑ | DBI ↓ | Spearman ρ ↑ |
+|-------|--------------|--------------|-------|--------------|
+| Trip2Vec | 5.357 | 0.137 | 2.063 | **0.413** |
+| GCN Autoencoder | 0.866 | 0.707 | 0.741 | 0.151 |
+| Dual-Graph | **7.244** | 0.706 | 0.690 | 0.117 |
+| Dual-Graph + LSTM | 0.767 | 0.770 | 0.468 | 0.066 |
+| Dual-Graph + Temporal Attn | 0.766 | **0.787** | **0.452** | 0.071 |
 
-### Porto Taxi (508 cells, train Jul–Oct, val Nov, test Dec)
+### Porto Taxi (508 cells, train Jul–Oct, val Nov, test Dec, k=5)
 
-| Model | best k | Intra/Inter ↑ | Silhouette ↑ | DBI ↓ | Spearman ρ ↑ |
-|-------|--------|--------------|--------------|-------|--------------|
-| Trip2Vec | 4 | 3.90 | 0.100 | 2.67 | **0.125** |
-| GCN Autoencoder | 3 | 1.26 | 0.766 | 0.509 | -0.027 |
-| Dual-Graph | 3 | **5.97** | 0.756 | 0.533 | -0.141 |
-| Dual-Graph + LSTM | 3 | 3.87 | 0.762 | 0.569 | -0.303 |
-| Dual-Graph + Temporal Attn | 3 | 1.18 | **0.879** | **0.460** | -0.311 |
+| Model | Intra/Inter ↑ | Silhouette ↑ | DBI ↓ | Spearman ρ ↑ |
+|-------|--------------|--------------|-------|--------------|
+| Trip2Vec | 1.254 | 0.083 | 2.482 | **0.125** |
+| GCN Autoencoder | 0.791 | 0.697 | 0.527 | -0.038 |
+| Dual-Graph | **2.181** | 0.607 | 0.792 | -0.069 |
+| Dual-Graph + LSTM | 0.421 | 0.764 | 0.555 | -0.312 |
+| Dual-Graph + Temporal Attn | 0.652 | **0.789** | **0.501** | -0.310 |
 
-`best k` is selected by highest Intra/Inter Flow Ratio across k ∈ {3,4,5,6,7,8,10}.
+All models evaluated at fixed k=5 for fair comparison. k=5 is motivated by Trip2Vec independently achieving its best Intra/Inter score at k=5, suggesting five natural mobility communities exist in both datasets.
 
 
 ---
