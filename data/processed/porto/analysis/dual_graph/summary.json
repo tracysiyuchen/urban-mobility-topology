@@ -1,0 +1,10 @@
+{
+  "model": "dual_graph",
+  "n_cells": 508,
+  "best_k": 3,
+  "best_intra_inter": 5.972642788718727,
+  "silhouette_at_best_k": 0.7559033036231995,
+  "dbi_at_best_k": 0.5327409307695441,
+  "spearman_profile_rho": -0.14115577231326532,
+  "spearman_profile_pval": 0.0
+}

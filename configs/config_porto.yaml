@@ -1,0 +1,55 @@
+data:
+  dataset: "porto"
+  raw_path: "data/porto-trajectory/porto_trajectories_all.csv"
+  processed_dir: "data/processed/porto"
+  h3_resolution: 8
+  active_cell_min_trips: 20
+  trip_duration_min: 60
+  time_bins:
+    Morning Peak: [6, 10]
+    Midday: [10, 16]
+    Evening Peak: [16, 20]
+    Night_early: [20, 24]
+    Night_late: [0, 6]
+  geo_adj_top_k: 8
+  train_months: [7, 8, 9, 10]
+  val_months: [11]
+  test_months: [12]
+
+trip2vec:
+  embedding_dim: 64
+  window: 1
+  min_count: 1
+  workers: 4
+  epochs: 30
+  sg: 1
+  negative: 5
+
+gcn:
+  embedding_dim: 64
+  hidden_dim: 128
+  epochs: 30
+  lr: 0.001
+  weight_decay: 0.00001
+  scheduler_step: 10
+  scheduler_gamma: 0.5
+
+dual_graph:
+  embedding_dim: 64
+  hidden_dim: 128
+  n_heads: 4
+  dropout: 0.3
+  epochs: 30
+  lr: 0.001
+  weight_decay: 0.00001
+  scheduler_step: 10
+  scheduler_gamma: 0.5
+  flow_adj_top_k: 16
+
+loss:
+  zero_pair_sample_ratio: 1.0
+
+analysis:
+  kmeans_k_range: [3, 4, 5, 6, 7, 8, 10]
+  tsne_perplexity: 30
+  random_seed: 42

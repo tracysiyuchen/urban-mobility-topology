@@ -1,0 +1,10 @@
+{
+  "model": "trip2vec",
+  "n_cells": 508,
+  "best_k": 4,
+  "best_intra_inter": 3.8990673321503806,
+  "silhouette_at_best_k": 0.09961477667093277,
+  "dbi_at_best_k": 2.6709749099172804,
+  "spearman_profile_rho": 0.12480761168231981,
+  "spearman_profile_pval": 3.951628767868218e-249
+}

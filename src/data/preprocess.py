@@ -1,24 +1,19 @@
 """
-Data preprocessing pipeline for NYC Taxi Trip Duration dataset.
+Dataset-agnostic preprocessing pipeline.
 
-Steps:
-  1. Load & filter trips (remove sub-60s trips)
-  2. Map GPS coordinates to H3 cells (resolution 8, ~460m edge)
-  3. Filter to active cells (≥ min_trips pickup OR dropoff across full dataset)
-  4. Assign each trip to a configured time bin per day
-  5. Build per-snapshot OD matrices (log1p-transformed) + node features [outflow, inflow]
-  6. Build static geographic adjacency matrix A_geo (inverse-distance, top-k neighbors)
-  7. Save mapped trip records for downstream models
-  8. Save everything to data/processed/
+Each dataset-specific loader converts raw records into a common trip table:
+    pickup_datetime, pickup_latitude, pickup_longitude,
+    dropoff_latitude, dropoff_longitude, trip_duration
 
-Usage:
-    conda activate urban-mobility
-    python src/data/preprocess.py --config configs/config.yaml
+The shared pipeline then maps trips to H3 cells and builds the same processed
+artifacts for all models: OD snapshots, node features, A_geo, cell_index, and
+the empirical training OD matrix.
 """
 
 import argparse
 import json
 import os
+import re
 
 import h3
 import numpy as np
@@ -27,19 +22,112 @@ import scipy.sparse as sp
 import yaml
 from tqdm import tqdm
 
-# filter
-def load_and_filter(cfg: dict) -> pd.DataFrame:
-    df = pd.read_csv(cfg["data"]["raw_path"], parse_dates=["pickup_datetime"])
-    print(f"  Total trips loaded: {len(df):,}")
 
-    # Drop obvious data errors: trips shorter than min_dur
-    min_dur = cfg["data"]["trip_duration_min"]
+COMMON_TRIP_COLUMNS = [
+    "pickup_datetime",
+    "pickup_latitude",
+    "pickup_longitude",
+    "dropoff_latitude",
+    "dropoff_longitude",
+    "trip_duration",
+]
+
+
+def parse_point(point: str) -> tuple[float, float]:
+    """Parse POINT(lon lat) and return (lat, lon)."""
+    match = re.match(r"POINT\(([-0-9.]+) ([-0-9.]+)\)", str(point))
+    if not match:
+        return np.nan, np.nan
+    lon, lat = map(float, match.groups())
+    return lat, lon
+
+
+def load_nyc_taxi(cfg: dict) -> pd.DataFrame:
+    df = pd.read_csv(cfg["data"]["raw_path"], parse_dates=["pickup_datetime"])
+    print(f"  NYC trips loaded: {len(df):,}")
+
+    min_dur = cfg["data"].get("trip_duration_min", 60)
     df = df[df["trip_duration"] >= min_dur].copy()
     print(f"  After removing trips < {min_dur}s: {len(df):,} trips")
+
+    return df[COMMON_TRIP_COLUMNS].copy()
+
+
+def load_porto(cfg: dict) -> pd.DataFrame:
+    raw_path = cfg["data"]["raw_path"]
+    df = pd.read_csv(raw_path)
+    print(f"  Porto trips loaded: {len(df):,}")
+
+    if {"source_point", "target_point", "timestamp"}.issubset(df.columns):
+        pickup = df["source_point"].apply(parse_point)
+        dropoff = df["target_point"].apply(parse_point)
+        out = pd.DataFrame({
+            "pickup_datetime": pd.to_datetime(df["timestamp"]),
+            "pickup_latitude": [p[0] for p in pickup],
+            "pickup_longitude": [p[1] for p in pickup],
+            "dropoff_latitude": [p[0] for p in dropoff],
+            "dropoff_longitude": [p[1] for p in dropoff],
+            "trip_duration": np.nan,
+        })
+    elif {"TIMESTAMP", "POLYLINE"}.issubset(df.columns):
+        polylines = df["POLYLINE"].apply(json.loads)
+        valid = polylines.apply(lambda pts: len(pts) >= 2)
+        df = df[valid].copy()
+        polylines = polylines[valid]
+        out = pd.DataFrame({
+            "pickup_datetime": pd.to_datetime(df["TIMESTAMP"], unit="s"),
+            "pickup_latitude": polylines.apply(lambda pts: pts[0][1]),
+            "pickup_longitude": polylines.apply(lambda pts: pts[0][0]),
+            "dropoff_latitude": polylines.apply(lambda pts: pts[-1][1]),
+            "dropoff_longitude": polylines.apply(lambda pts: pts[-1][0]),
+            "trip_duration": polylines.apply(lambda pts: (len(pts) - 1) * 15),
+        })
+    else:
+        raise ValueError(
+            "Unsupported Porto schema. Expected source_point/target_point/timestamp "
+            "or TIMESTAMP/POLYLINE columns."
+        )
+
+    print(f"  Porto usable OD trips: {len(out):,}")
+    return out
+
+
+
+def filter_common_trips(df: pd.DataFrame, min_duration: int) -> pd.DataFrame:
+    df = df.dropna(subset=[
+        "pickup_datetime",
+        "pickup_latitude",
+        "pickup_longitude",
+        "dropoff_latitude",
+        "dropoff_longitude",
+    ]).copy()
+
+    if "trip_duration" in df.columns and df["trip_duration"].notna().any():
+        df = df[df["trip_duration"].fillna(min_duration) >= min_duration].copy()
+
+    lat_ok = df["pickup_latitude"].between(-90, 90) & df["dropoff_latitude"].between(-90, 90)
+    lon_ok = df["pickup_longitude"].between(-180, 180) & df["dropoff_longitude"].between(-180, 180)
+    df = df[lat_ok & lon_ok].copy()
+    df["pickup_datetime"] = pd.to_datetime(df["pickup_datetime"])
+    return df[COMMON_TRIP_COLUMNS]
+
+
+def load_and_filter(cfg: dict) -> pd.DataFrame:
+    dataset = cfg["data"].get("dataset", "nyc_taxi")
+    print(f"Loading dataset: {dataset}")
+
+    if dataset == "nyc_taxi":
+        df = load_nyc_taxi(cfg)
+    elif dataset == "porto":
+        df = load_porto(cfg)
+    else:
+        raise ValueError(f"Unsupported data.dataset={dataset!r}. Supported: nyc_taxi, porto")
+
+    df = filter_common_trips(df, cfg["data"].get("trip_duration_min", 0))
+    print(f"  Common trip table rows: {len(df):,}")
     return df
 
 
-# Time-bin assignment
 def assign_time_bin(hour: int, time_bins: dict) -> str:
     for label, (start, end) in time_bins.items():
         if start <= end:
@@ -53,16 +141,14 @@ def assign_time_bin(hour: int, time_bins: dict) -> str:
     raise ValueError(f"Hour {hour} does not match any configured time bin")
 
 def add_temporal_fields(df: pd.DataFrame, time_bins: dict) -> pd.DataFrame:
-    df["date"]     = df["pickup_datetime"].dt.date
-    df["hour"]     = df["pickup_datetime"].dt.hour
+    df["date"] = df["pickup_datetime"].dt.date
+    df["hour"] = df["pickup_datetime"].dt.hour
     df["time_bin"] = df["hour"].apply(lambda h: assign_time_bin(h, time_bins))
     return df
 
 
-
-# H3 mapping
 def map_to_h3(df: pd.DataFrame, resolution: int) -> pd.DataFrame:
-    print(f"Mapping GPS coordinates to H3 resolution {resolution} …")
+    print(f"Mapping GPS coordinates to H3 resolution {resolution} ...")
     df["pickup_h3"] = [h3.latlng_to_cell(lat, lon, resolution) for lat, lon in zip(df["pickup_latitude"], df["pickup_longitude"])]
     df["dropoff_h3"] = [h3.latlng_to_cell(lat, lon, resolution) for lat, lon in zip(df["dropoff_latitude"], df["dropoff_longitude"])]
     print(f"  Unique pickup cells:  {df['pickup_h3'].nunique()}")
@@ -72,16 +158,15 @@ def map_to_h3(df: pd.DataFrame, resolution: int) -> pd.DataFrame:
 
 # baseline: min total trips (pickup OR dropoff) to keep a cell
 def get_active_cells(df: pd.DataFrame, min_trips: int) -> list:
-    pickup_counts  = df["pickup_h3"].value_counts()
+    pickup_counts = df["pickup_h3"].value_counts()
     dropoff_counts = df["dropoff_h3"].value_counts()
     active = sorted(
-        set(pickup_counts[pickup_counts   >= min_trips].index) |
+        set(pickup_counts[pickup_counts >= min_trips].index) |
         set(dropoff_counts[dropoff_counts >= min_trips].index)
     )
-    print(f"  Active cells (≥{min_trips} trips as pickup or dropoff): {len(active)}")
+    print(f"  Active cells (>={min_trips} trips as pickup or dropoff): {len(active)}")
     return active
 
-# OD matrices + node features per snapshot
 
 def build_snapshots(df: pd.DataFrame, active_cells: list, out_dir: str) -> list:
     # For each (date, time_bin) snapshot build:
@@ -107,7 +192,7 @@ def build_snapshots(df: pd.DataFrame, active_cells: list, out_dir: str) -> list:
 
     groups    = list(df_active.groupby(["date", "time_bin"]))
     snapshots = []
-    print(f"  Building {len(groups)} snapshots …")
+    print(f"  Building {len(groups)} snapshots ...")
 
     for (date, tbin), grp in tqdm(groups, desc="snapshots"):
         ### fixed 04/11 for sparsity
@@ -118,8 +203,8 @@ def build_snapshots(df: pd.DataFrame, active_cells: list, out_dir: str) -> list:
         ).tocsr()
         od_raw.sum_duplicates()
 
-        # od_raw  — sparse raw trip counts, used for empirical OD analysis
-        # od_log  — sparse log1p(od_raw), used as training target (normalises scale)
+        # od_raw: sparse raw trip counts, used for empirical OD analysis.
+        # od_log: sparse log1p(od_raw), used as training target.
         od_log = od_raw.astype(np.float32).copy()
         od_log.data = np.log1p(od_log.data).astype(np.float32)
         outflow = np.log1p(np.asarray(od_raw.sum(axis=1)).ravel()).astype(np.float32)  # [N]
@@ -136,14 +221,12 @@ def build_snapshots(df: pd.DataFrame, active_cells: list, out_dir: str) -> list:
     return snapshots
 
 
-# Geographic adjacency matrix
-
 def build_geo_adj(active_cells: list, top_k: int, out_dir: str) -> sp.csr_matrix:
     # Build a row-normalised geographic adjacency matrix A_geo where each cell
     # connects to its top_k nearest neighbours weighted by inverse Haversine distance.
-    # Saved once — this matrix is static across all snapshots and models.
-    print(f"Building geographic adjacency matrix (top-k={top_k}) …")
-    N         = len(active_cells)
+    # Saved once; this matrix is static across all snapshots and models.
+    print(f"Building geographic adjacency matrix (top-k={top_k}) ...")
+    N = len(active_cells)
     centroids = np.array([h3.cell_to_latlng(c) for c in active_cells])  # [N, 2] lat/lon
 
     lat = np.radians(centroids[:, 0])
@@ -184,7 +267,7 @@ def save_processed_trips(df: pd.DataFrame, out_dir: str):
     trip_cols = ["pickup_datetime", "pickup_h3", "dropoff_h3", "date", "hour", "time_bin"]
     trip_path = os.path.join(out_dir, "processed_trips.csv")
     df[trip_cols].to_csv(trip_path, index=False)
-    print(f"  Processed trips saved: {len(df):,} rows → {trip_path}")
+    print(f"  Processed trips saved: {len(df):,} rows -> {trip_path}")
 
 
 def build_empirical_od(manifest: pd.DataFrame, active_cells: list,
@@ -198,8 +281,8 @@ def build_empirical_od(manifest: pd.DataFrame, active_cells: list,
       - Spearman correlation    (must use raw counts)
     Saved once here so analyze.py never has to loop through 728 snapshot files.
     """
-    print("Building aggregated empirical OD matrix (train months only) …")
-    N           = len(active_cells)
+    print("Building aggregated empirical OD matrix (train months only) ...")
+    N = len(active_cells)
     od_empirical = np.zeros((N, N), dtype=np.int64)
     od_dir      = os.path.join(out_dir, "od_matrices")
 
@@ -213,10 +296,8 @@ def build_empirical_od(manifest: pd.DataFrame, active_cells: list,
 
     path = os.path.join(out_dir, "od_empirical_train.npz")
     np.savez_compressed(path, od=od_empirical)
-    print(f"  Empirical OD saved: total flow = {od_empirical.sum():,} trips → {path}")
+    print(f"  Empirical OD saved: total flow = {od_empirical.sum():,} trips -> {path}")
 
-
-# Main
 
 def main(config_path: str):
     with open(config_path) as f:

@@ -142,7 +142,7 @@ def group_keys_by_day(keys: list) -> dict:
 
 def train_no_temporal(cfg, model, processed, device,
                       geo_edge_index, geo_edge_weight,
-                      train_keys, val_keys):
+                      train_keys, val_keys, suffix=""):
     """Original per-snapshot training (no temporal modeling)."""
     dg_cfg = cfg["dual_graph"]
     optimizer = Adam(model.parameters(), lr=dg_cfg["lr"], weight_decay=dg_cfg["weight_decay"])
@@ -153,7 +153,7 @@ def train_no_temporal(cfg, model, processed, device,
     flow_top_k = dg_cfg["flow_adj_top_k"]
     model_dir = os.path.join(processed, "models", "dual_graph")
     os.makedirs(model_dir, exist_ok=True)
-    best_model_path = os.path.join(model_dir, "dual_graph_best.pt")
+    best_model_path = os.path.join(model_dir, f"dual_graph_best{suffix}.pt")
 
     for epoch in range(1, epochs + 1):
         model.train()
@@ -245,7 +245,7 @@ def _load_day_data(processed, day_keys, flow_top_k, device):
 
 def train_temporal(cfg, model, processed, device,
                    geo_edge_index, geo_edge_weight,
-                   train_keys, val_keys):
+                   train_keys, val_keys, suffix=""):
     """Per-day sequence training (LSTM or temporal attention)."""
     dg_cfg = cfg["dual_graph"]
     optimizer = Adam(model.parameters(), lr=dg_cfg["lr"], weight_decay=dg_cfg["weight_decay"])
@@ -256,7 +256,7 @@ def train_temporal(cfg, model, processed, device,
     flow_top_k = dg_cfg["flow_adj_top_k"]
     model_dir = os.path.join(processed, "models", "dual_graph")
     os.makedirs(model_dir, exist_ok=True)
-    best_model_path = os.path.join(model_dir, "dual_graph_best.pt")
+    best_model_path = os.path.join(model_dir, f"dual_graph_best{suffix}.pt")
 
     # Group snapshots into daily sequences
     train_days = group_keys_by_day(train_keys)
@@ -383,22 +383,22 @@ def main():
     print(f"Model parameters: {param_count:,}")
 
     # ── Train ──
+    suffix = "" if temporal_mode == "none" else f"_{temporal_mode}"
     if temporal_mode == "none":
         embeddings, best_val, best_model_path = train_no_temporal(
             cfg, model, processed, device,
             geo_edge_index, geo_edge_weight,
-            train_keys, val_keys,
+            train_keys, val_keys, suffix=suffix,
         )
     else:
         embeddings, best_val, best_model_path = train_temporal(
             cfg, model, processed, device,
             geo_edge_index, geo_edge_weight,
-            train_keys, val_keys,
+            train_keys, val_keys, suffix=suffix,
         )
 
     # ── Save embeddings ──
     model_dir = os.path.join(processed, "models", "dual_graph")
-    suffix = "" if temporal_mode == "none" else f"_{temporal_mode}"
     emb_path = os.path.join(model_dir, f"embeddings{suffix}.npy")
     np.save(emb_path, embeddings)
     print(f"Embeddings saved: {embeddings.shape} -> {emb_path}")

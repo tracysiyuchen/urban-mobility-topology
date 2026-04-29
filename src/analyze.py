@@ -165,20 +165,34 @@ def plot_tsne(xy: np.ndarray, labels: np.ndarray, od_matrix: np.ndarray,
 
 
 # 4. Spearman: embedding cosine similarity vs OD-profile cosine similarity
-def spearman_sim_vs_od_profile(embeddings: np.ndarray, od_matrix: np.ndarray) -> float:
+def spearman_sim_vs_od_profile(embeddings: np.ndarray, od_matrix: np.ndarray) -> tuple:
     # Compare node-pair similarity in embedding space against similarity in
     # empirical mobility profiles. Each OD row is treated as one region's
     # aggregate travel pattern to all other regions.
+    #
+    # Only pairs where BOTH cells have meaningful OD flow are included.
+    # Zero-flow cells contribute near-zero od_cos for all their pairs, which
+    # dominates the rank correlation and suppresses the true signal.
     emb_norm = normalize(embeddings, norm="l2")
     emb_cos = emb_norm @ emb_norm.T                      # [N, N]
 
-    od_sym = od_matrix + od_matrix.T
+    od_sym = od_matrix + od_matrix.T                     # combine in + out flow
     od_norm = normalize(od_sym, norm="l2")
     od_cos = od_norm @ od_norm.T                         # [N, N]
 
-    N = len(embeddings)
-    idx = np.triu_indices(N, k=1)
-    rho, pval = spearmanr(emb_cos[idx], od_cos[idx])
+    # Filter to cells above the 25th percentile of non-zero total flow
+    cell_flow = od_sym.sum(axis=1)
+    nonzero_flows = cell_flow[cell_flow > 0]
+    threshold = float(np.percentile(nonzero_flows, 25)) if len(nonzero_flows) else 0.0
+    active_idx = np.where(cell_flow > threshold)[0]
+    n_active = len(active_idx)
+
+    emb_sub = emb_cos[np.ix_(active_idx, active_idx)]   # [M, M]
+    od_sub  = od_cos[np.ix_(active_idx, active_idx)]    # [M, M]
+
+    idx = np.triu_indices(n_active, k=1)
+    rho, pval = spearmanr(emb_sub[idx], od_sub[idx])
+    print(f"  (active cells: {n_active}/{len(embeddings)}, pairs: {len(idx[0])})")
     return float(rho), float(pval)
 
 
@@ -216,14 +230,15 @@ def main(embeddings_path: str, model_name: str, config_path: str):
             "dbi":              r["dbi"],
             "intra_inter_ratio":ratio,
         })
-        # Pick k with best silhouette as "best"
-        if best_k_result is None or r["silhouette"] > best_k_result["silhouette"]:
+        # Pick k with best intra/inter flow ratio — directly measures whether clusters
+        # correspond to OD flow communities, aligned with the functional topology goal.
+        if best_k_result is None or r["intra_inter_ratio"] > best_k_result["intra_inter_ratio"]:
             best_k_result = r
 
     metrics_df = pd.DataFrame(all_rows)
     metrics_path = os.path.join(out_dir, "clustering_metrics.csv")
     metrics_df.to_csv(metrics_path, index=False)
-    print(f"\n  Best k by Silhouette: k={best_k_result['k']}")
+    print(f"\n  Best k by Intra/Inter Flow Ratio: k={best_k_result['k']}")
     print(f"  Metrics table saved → {metrics_path}")
 
     # ── 3. t-SNE ────────────────────────────────────────────────────────────
@@ -242,14 +257,14 @@ def main(embeddings_path: str, model_name: str, config_path: str):
 
     # ── Summary ─────────────────────────────────────────────────────────────
     summary = {
-        "model":               model_name,
-        "n_cells":             N,
-        "best_k":              best_k_result["k"],
-        "best_silhouette":     best_k_result["silhouette"],
-        "best_dbi":            best_k_result["dbi"],
-        "best_intra_inter":    best_k_result["intra_inter_ratio"],
-        "spearman_profile_rho":  rho_profile,
-        "spearman_profile_pval": pval_profile,
+        "model":                  model_name,
+        "n_cells":                N,
+        "best_k":                 best_k_result["k"],
+        "best_intra_inter":       best_k_result["intra_inter_ratio"],
+        "silhouette_at_best_k":   best_k_result["silhouette"],
+        "dbi_at_best_k":          best_k_result["dbi"],
+        "spearman_profile_rho":   rho_profile,
+        "spearman_profile_pval":  pval_profile,
     }
     summary_path = os.path.join(out_dir, "summary.json")
     with open(summary_path, "w") as f:

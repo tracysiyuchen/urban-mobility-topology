@@ -2,7 +2,6 @@
 # Raw / external datasets (large, not in repo)
 # ========================
 data/nyc-taxi-trip-duration/
-data/T-Drive-trajectory/
 data/porto-trajectory/
 
 # ========================

@@ -1,6 +1,7 @@
 data:
+  dataset: "nyc_taxi"
   raw_path: "data/nyc-taxi-trip-duration/train.csv"
-  processed_dir: "data/processed"
+  processed_dir: "data/processed/nyc"
   h3_resolution: 8
   active_cell_min_trips: 20      # min total trips (pickup OR dropoff) to keep a cell
   trip_duration_min: 60           # seconds
@@ -24,6 +25,15 @@ trip2vec:
   sg: 1                           # skip-gram
   negative: 5
 
+
+gcn:
+  embedding_dim: 64
+  hidden_dim: 128
+  epochs: 30
+  lr: 0.001
+  weight_decay: 0.00001
+  scheduler_step: 10
+  scheduler_gamma: 0.5
 
 dual_graph:
   embedding_dim: 64

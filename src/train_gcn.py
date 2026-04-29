@@ -1,4 +1,6 @@
+import argparse
 import os
+import sys
 import json
 import numpy as np
 import scipy.sparse as sp
@@ -6,16 +8,21 @@ import torch
 import torch.nn.functional as F
 import pandas as pd
 import yaml
+from pathlib import Path
 from torch.optim import Adam
 from torch.optim.lr_scheduler import StepLR
 from torch_geometric.utils import from_scipy_sparse_matrix
 from tqdm import tqdm
 from collections import defaultdict
 
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
 from src.models.gcn_autoencoder import GCNAutoencoder
 
 
-def load_config(path="configs/config.yaml"):
+def load_config(path):
     with open(path) as f:
         return yaml.safe_load(f)
 
@@ -56,9 +63,13 @@ def od_loss(od_pred, od_true):
 
 
 def main():
-    cfg       = load_config()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--config", default="configs/config.yaml")
+    args = parser.parse_args()
+
+    cfg       = load_config(args.config)
     processed = cfg["data"]["processed_dir"]
-    embed_dim = cfg["trip2vec"]["embedding_dim"]
+    gcn_cfg   = cfg["gcn"]
     device    = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
 
@@ -72,12 +83,18 @@ def main():
 
     print(f"Train days: {len(train_days)}  |  Val days: {len(val_days)}")
 
-    model     = GCNAutoencoder(in_dim=2, hidden_dim=128, embed_dim=embed_dim).to(device)
-    optimizer = Adam(model.parameters(), lr=1e-3, weight_decay=1e-5)
-    scheduler = StepLR(optimizer, step_size=5, gamma=0.5)
+    model     = GCNAutoencoder(in_dim=2,
+                               hidden_dim=gcn_cfg["hidden_dim"],
+                               embed_dim=gcn_cfg["embedding_dim"]).to(device)
+    optimizer = Adam(model.parameters(),
+                     lr=gcn_cfg["lr"],
+                     weight_decay=gcn_cfg["weight_decay"])
+    scheduler = StepLR(optimizer,
+                       step_size=gcn_cfg["scheduler_step"],
+                       gamma=gcn_cfg["scheduler_gamma"])
 
     best_val = float("inf")
-    epochs   = 20
+    epochs   = gcn_cfg["epochs"]
 
     for epoch in range(1, epochs + 1):
 
@@ -126,12 +143,14 @@ def main():
 
         if val_loss < best_val:
             best_val = val_loss
-            os.makedirs("data/processed/models", exist_ok=True)
-            torch.save(model.state_dict(), "data/processed/models/gcn_autoencoder_best.pt")
+            model_dir = os.path.join(processed, "models", "gcn")
+            os.makedirs(model_dir, exist_ok=True)
+            best_path = os.path.join(model_dir, "gcn_best.pt")
+            torch.save(model.state_dict(), best_path)
             print(f"  ✓ Best model saved (val_loss={best_val:.4f})")
 
-    print("\nExtracting embeddings …")
-    model.load_state_dict(torch.load("data/processed/models/gcn_autoencoder_best.pt"))
+    print("\nExtracting embeddings ...")
+    model.load_state_dict(torch.load(best_path, weights_only=True))
     model.eval()
     all_embeddings = []
     with torch.no_grad():
@@ -141,10 +160,11 @@ def main():
             all_embeddings.append(z.cpu().numpy())
 
     embeddings = np.mean(all_embeddings, axis=0)
-    out_path   = "data/processed/analysis/gcn/embeddings.npy"
-    os.makedirs(os.path.dirname(out_path), exist_ok=True)
+    emb_dir  = os.path.join(processed, "models", "gcn")
+    os.makedirs(emb_dir, exist_ok=True)
+    out_path = os.path.join(emb_dir, "embeddings.npy")
     np.save(out_path, embeddings)
-    print(f"Embeddings saved: {embeddings.shape} → {out_path}")
+    print(f"Embeddings saved: {embeddings.shape} -> {out_path}")
 
 
 if __name__ == "__main__":
