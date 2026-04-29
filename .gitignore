@@ -1,92 +1,70 @@
-# Datasets
+# ========================
+# Raw / external datasets (large, not in repo)
+# ========================
 data/nyc-taxi-trip-duration/
-data/processed/
-!data/processed/
-data/processed/*
-!data/processed/analysis/
-!data/processed/analysis/**
+data/T-Drive-trajectory/
 
-# Python
-__pycache__/
-*.py[cod]
-*.egg-info/
-.env
+# ========================
+# Processed data — generated files (not tracked)
+# Note: summary.json, clustering_metrics.csv, and *.png are tracked.
+# ========================
+data/processed/node_features/
+data/processed/od_matrices/
+data/processed/models/
+data/processed/A_geo.npz
+data/processed/od_empirical_train.npz
+data/processed/processed_trips.csv
+data/processed/snapshot_manifest.csv
+data/processed/cell_index.json
 
-# Conda / venv
-.conda/
-env/
-venv/
-
-# Jupyter
-.ipynb_checkpoints/
-*.ipynb
-
-# OS
-.DS_Store
-
-# IDE
-.vscode/
-.idea/
-# =========================
-# Python
-# =========================
-__pycache__/
-*.pyc
-*.pyo
-*.pyd
-*.pyc.*
-*.egg-info/
-dist/
-build/
-
-# Virtual environments
-.venv/
-venv/
-env/
-
-# Jupyter
-.ipynb_checkpoints/
-
-# =========================
-# OS / Editor
-# =========================
-.DS_Store
-.vscode/
-.idea/
-
-# =========================
-# Data (ignore all processed data by default)
-# =========================
-data/processed/*
-data/raw/*
-data/interim/*
-
-# Allow ONLY selected analysis outputs (figures)
-!data/processed/analysis/
-!data/processed/analysis/**/*.png
-!data/processed/analysis/**/*.jpg
-!data/processed/analysis/**/*.jpeg
-!data/processed/analysis/**/*.html
-
-# =========================
-# Large / generated files
-# =========================
+# ========================
+# Large binary file types (global — covers embeddings, model weights, etc.)
+# ========================
 *.npy
 *.npz
 *.pt
 *.pth
-*.ckpt
-*.h5
 *.pkl
 *.pickle
+*.h5
 
-# =========================
-# Logs
-# =========================
-*.log
+# ========================
+# Python
+# ========================
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+dist/
+build/
+.env
 
-# =========================
+# ========================
+# Virtual environments
+# ========================
+.venv/
+venv/
+env/
+.conda/
+
+# ========================
+# Jupyter
+# ========================
+.ipynb_checkpoints/
+*.ipynb
+
+# ========================
+# OS / Editor
+# ========================
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# ========================
 # Misc
-# =========================
+# ========================
+*.log
 *.tmp
 *.swp
