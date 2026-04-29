@@ -3,19 +3,34 @@
 # ========================
 data/nyc-taxi-trip-duration/
 data/T-Drive-trajectory/
+data/porto-trajectory/
 
 # ========================
 # Processed data — generated files (not tracked)
-# Note: summary.json, clustering_metrics.csv, and *.png are tracked.
+# analysis/**/*.json, *.csv, *.png are tracked (no ignore rule for those).
+# One block per dataset; add a new block when a new dataset is added.
 # ========================
-data/processed/node_features/
-data/processed/od_matrices/
-data/processed/models/
-data/processed/A_geo.npz
-data/processed/od_empirical_train.npz
-data/processed/processed_trips.csv
-data/processed/snapshot_manifest.csv
-data/processed/cell_index.json
+
+# nyc
+data/processed/nyc/node_features/
+data/processed/nyc/od_matrices/
+data/processed/nyc/models/
+data/processed/nyc/A_geo.npz
+data/processed/nyc/od_empirical_train.npz
+data/processed/nyc/processed_trips.csv
+data/processed/nyc/snapshot_manifest.csv
+data/processed/nyc/cell_index.json
+
+# porto
+data/processed/porto/node_features/
+data/processed/porto/od_matrices/
+data/processed/porto/models/
+data/processed/porto/A_geo.npz
+data/processed/porto/od_empirical_train.npz
+data/processed/porto/processed_trips.csv
+data/processed/porto/snapshot_manifest.csv
+data/processed/porto/cell_index.json
+
 
 # ========================
 # Large binary file types (global — covers embeddings, model weights, etc.)
